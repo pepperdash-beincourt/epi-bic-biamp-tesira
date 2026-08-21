@@ -8,6 +8,12 @@ This is a **public** fork of a PepperDash Essentials plug-in. Treat every tracke
 
 Develop only on approved non-default branches. Do not push to `main`, rewrite published history, create a release manually, or open a pull request without explicit approval. Preserve the approved PepperDash upstream baseline and retain `upstream` as the read-only sync remote. Before an upstream sync, compare the intended ref, preserve local work deliberately, and repeat release checks after integration.
 
+## Protected integration and sandbox workflow
+
+`main` is the protected integration branch. Changes to `main` require a pull request, one approving review from a person other than the pull-request author, approval after the latest push, and resolved review conversations. These controls apply to administrators as well.
+
+The approved `csv-sandbox-<repository>` branch is the active iteration and prerelease channel. The person operating an AI agent is accountable for every agent-authored change, including its public-boundary review, commit classification, validation evidence, and release impact. An AI agent or its operator must not self-approve an integration pull request.
+
 ## Device-control implementation
 
 Use typed device interfaces for new device-control features and methods. Do not introduce reflection, `dynamic`, or string-based member dispatch where a typed interface can define the required contract. Keep public changes generic and independently understandable.

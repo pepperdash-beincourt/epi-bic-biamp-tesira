@@ -5,6 +5,12 @@ on:
     branches:
       - '**'
 
+# The reusable workflow creates release tags/assets and publishes the plug-in package.
+# Declare these permissions explicitly so the fork does not depend on repository defaults.
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   getVersion:
     uses: PepperDash/workflow-templates/.github/workflows/essentialsplugins-getversion.yml@main

@@ -85,6 +85,19 @@ namespace Pepperdash.Essentials.Plugins.DSP.Biamp.Tesira.Dialer
         /// <summary>True when the VoIP line is registered and ready (VoIP only).</summary>
         public bool LineReady { get; protected set; }
 
+        /// <summary>
+        /// Marks the line as not ready, for use when the DSP connection drops. The lineReady
+        /// subscription restores the real value when the DSP reconnects.
+        /// </summary>
+        public void ClearLineReady()
+        {
+            if (!LineReady)
+                return;
+
+            LineReady = false;
+            LineReadyFeedback?.FireUpdate();
+        }
+
         /// <summary>True when a dial tone is detected on the line (POTS only).</summary>
         public bool DialToneDetected { get; protected set; }
 

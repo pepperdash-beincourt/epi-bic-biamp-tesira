@@ -1,4 +1,6 @@
-﻿using Crestron.SimplSharp;
+﻿using System;
+using System.Threading;
+using Crestron.SimplSharp;
 using PepperDash.Core.Logging;
 
 namespace Pepperdash.Essentials.Plugins.DSP.Biamp.Tesira.Queue
@@ -24,6 +26,15 @@ namespace Pepperdash.Essentials.Plugins.DSP.Biamp.Tesira.Queue
         private QueuedCommand lastDequeued;
 
         private readonly object lockObject = new object();
+
+        /// <summary>
+        /// How long a sent command may wait for its reply before the queue moves on. Replies normally
+        /// arrive within milliseconds; this is a backstop so that a reply the parser does not
+        /// recognise, or one lost with the connection, cannot stop every later command.
+        /// </summary>
+        public static readonly TimeSpan ResponseTimeout = TimeSpan.FromSeconds(10);
+
+        private Timer responseTimer;
 
         /// <summary>
         /// Constructor for Tesira Queue
@@ -59,6 +70,7 @@ namespace Pepperdash.Essentials.Plugins.DSP.Biamp.Tesira.Queue
                 }
 
                 lastDequeued = null;
+                CancelResponseTimer();
 
                 if (LocalQueue.IsEmpty)
                 {
@@ -82,7 +94,12 @@ namespace Pepperdash.Essentials.Plugins.DSP.Biamp.Tesira.Queue
                 Parent.LogVerbose("[EnqueueCommand] Attempting to enqueue command for {controlPoint} with priority {priority}", commandToEnqueue.ControlPoint?.Key ?? "no control point", commandToEnqueue.Priority);
                 Parent.LogVerbose("[EnqueueCommand] Command Queue {state} in progress.", CommandQueueInProgress ? "is" : "is not");
 
-                LocalQueue.Enqueue(commandToEnqueue);
+                // Never block while holding the lock: a full queue drops the command instead.
+                if (!LocalQueue.TryToEnqueue(commandToEnqueue))
+                {
+                    Parent.LogWarning("[EnqueueCommand] Command queue is full ({count} items); dropping '{command}'", LocalQueue.Count, commandToEnqueue.Command);
+                    return;
+                }
 
                 Parent.LogVerbose("[EnqueueCommand] Command Enqueued: '{command}'.  CommandQueue has {count} items", commandToEnqueue.Command, LocalQueue.Count);
 
@@ -142,10 +159,44 @@ namespace Pepperdash.Essentials.Plugins.DSP.Biamp.Tesira.Queue
 
                 Parent.LogVerbose("[SendNextQueuedCommand] Sending Line {line}. ControlPoint: {controlPoint}", lastDequeued.Command, lastDequeued.ControlPoint?.Key ?? "no control point");
 
+                StartResponseTimer(lastDequeued);
+
                 if (lastDequeued.SendLineRaw)
                     Parent.SendLineRaw(lastDequeued.Command, lastDequeued.BypassTxQueue);
                 else
                     Parent.SendLine(lastDequeued.Command, lastDequeued.BypassTxQueue);
+            }
+        }
+
+        private void StartResponseTimer(QueuedCommand sent)
+        {
+            CancelResponseTimer();
+            responseTimer = new Timer(_ => OnResponseTimeout(sent), null, ResponseTimeout, System.Threading.Timeout.InfiniteTimeSpan);
+        }
+
+        private void CancelResponseTimer()
+        {
+            responseTimer?.Dispose();
+            responseTimer = null;
+        }
+
+        private void OnResponseTimeout(QueuedCommand sent)
+        {
+            lock (lockObject)
+            {
+                // Only if that command is still the one waiting: its reply may have arrived as the
+                // timer fired, and the queue may have been cleared or moved on since.
+                if (!ReferenceEquals(lastDequeued, sent))
+                    return;
+
+                Parent.LogWarning("[ResponseTimeout] No reply to '{command}' within {seconds}s; moving on to the next command", sent.Command, ResponseTimeout.TotalSeconds);
+
+                lastDequeued = null;
+                CancelResponseTimer();
+                CommandQueueInProgress = false;
+
+                if (!LocalQueue.IsEmpty)
+                    SendNextQueuedCommand();
             }
         }
 
@@ -159,6 +210,7 @@ namespace Pepperdash.Essentials.Plugins.DSP.Biamp.Tesira.Queue
                 if (LocalQueue == null) return;
                 LocalQueue.Clear();
                 lastDequeued = null;
+                CancelResponseTimer();
                 CommandQueueInProgress = false;
             }
         }

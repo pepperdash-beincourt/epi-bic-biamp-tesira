@@ -687,6 +687,14 @@ namespace Pepperdash.Essentials.Plugins.DSP.Biamp.Tesira
             if (!e.Client.IsConnected)
             {
                 SuspendWatchdog(true);
+
+                // Line registration is only known from the DSP's subscription messages; while the
+                // DSP is unreachable it is not known to be ready. The subscription on reconnect
+                // restores the real value.
+                foreach (var dialer in Dialers.Values)
+                {
+                    dialer.ClearLineReady();
+                }
             }
             else
             {
@@ -1064,6 +1072,16 @@ namespace Pepperdash.Essentials.Plugins.DSP.Biamp.Tesira
                         }
                     }
 
+                    return;
+                }
+
+                // Other TTP error replies (-CANNOT_DELIVER, -GENERAL_FAILURE, ...) are replies too.
+                // Unhandled, the queue waited for a reply that had already arrived and every later
+                // command stalled behind it.
+                if (args.Text.StartsWith("-", StringComparison.Ordinal))
+                {
+                    this.LogDebug("Error From DSP: '{0}'", args.Text);
+                    CommandQueue.HandleResponse(args.Text);
                     return;
                 }
             }

@@ -13,11 +13,11 @@ public class FactoryMetadataTests
     [Fact]
     public void Factory_Sets_MinimumEssentialsFrameworkVersion_To_3_0_0()
     {
-        // Must match the exact PepperDashEssentials version pinned in the csproj, not a bare
-        // "3.0.0" (no stable/GA 3.0.0 has shipped; semver ranks a prerelease/RC lower than the
-        // plain version, so a mismatched literal can fail the runtime compatibility gate).
-        Regex.IsMatch(FactorySource.Value, @"MinimumEssentialsFrameworkVersion\s*=\s*""3\.0\.0-rc\.1""")
-            .Should().BeTrue("TesiraFactory should set MinimumEssentialsFrameworkVersion to \"3.0.0-rc.1\", matching the pinned PackageReference");
+        // Must be a plain "3.0.0": Essentials parses the minimum with System.Version, which rejects a
+        // prerelease suffix ("3.0.0-rc.1") and then bypasses the plugin load, and it compares only the
+        // numeric part of the running version, so any 3.0.0 prerelease of Essentials passes.
+        Regex.IsMatch(FactorySource.Value, @"MinimumEssentialsFrameworkVersion\s*=\s*""3\.0\.0""")
+            .Should().BeTrue("TesiraFactory should set MinimumEssentialsFrameworkVersion to \"3.0.0\", which Essentials can parse");
     }
 
     [Fact]
